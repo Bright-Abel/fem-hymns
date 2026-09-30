@@ -7,6 +7,9 @@ export interface Stanza {
   text: string;
 }
 
+const LEGACY_DATABASE_NAME = 'hymnal.db';
+const SAVED_DATA_MIGRATION = 'migrate-saved-data-from-hymnal-v1';
+
 export async function ensureSavedTables(
   db: SQLite.SQLiteDatabase,
 ): Promise<void> {
@@ -26,6 +29,83 @@ export async function ensureSavedTables(
       FOREIGN KEY (hymn_id) REFERENCES hymns(id) ON DELETE CASCADE
     );
   `);
+}
+
+export async function initializeHymnalDatabase(
+  db: SQLite.SQLiteDatabase,
+): Promise<void> {
+  await ensureSavedTables(db);
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS app_migrations (
+      name TEXT PRIMARY KEY NOT NULL,
+      completed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const completed = await db.getFirstAsync<{ name: string }>(
+    'SELECT name FROM app_migrations WHERE name = ?;',
+    [SAVED_DATA_MIGRATION],
+  );
+  if (completed) return;
+
+  const legacyDb = await SQLite.openDatabaseAsync(LEGACY_DATABASE_NAME);
+  try {
+    const legacyTables = await legacyDb.getAllAsync<{ name: string }>(
+      `SELECT name FROM sqlite_master
+       WHERE type = 'table' AND name IN ('hymns', 'favorites', 'bookmarks');`,
+    );
+    const tableNames = new Set(legacyTables.map(({ name }) => name));
+
+    const legacyFavorites =
+      tableNames.has('hymns') && tableNames.has('favorites')
+        ? await legacyDb.getAllAsync<{
+            hymn_number: number;
+            created_at: string | null;
+          }>(
+            `SELECT h.hymn_number, f.created_at
+             FROM favorites f
+             JOIN hymns h ON h.id = f.hymn_id;`,
+          )
+        : [];
+    const legacyBookmarks =
+      tableNames.has('hymns') && tableNames.has('bookmarks')
+        ? await legacyDb.getAllAsync<{
+            hymn_number: number;
+            notes: string | null;
+            created_at: string | null;
+          }>(
+            `SELECT h.hymn_number, b.notes, b.created_at
+             FROM bookmarks b
+             JOIN hymns h ON h.id = b.hymn_id;`,
+          )
+        : [];
+
+    await db.withTransactionAsync(async () => {
+      for (const favorite of legacyFavorites) {
+        await db.runAsync(
+          `INSERT OR IGNORE INTO favorites (hymn_id, created_at)
+           SELECT id, COALESCE(?, CURRENT_TIMESTAMP)
+           FROM hymns WHERE hymn_number = ?;`,
+          [favorite.created_at, favorite.hymn_number],
+        );
+      }
+
+      for (const bookmark of legacyBookmarks) {
+        await db.runAsync(
+          `INSERT OR IGNORE INTO bookmarks (hymn_id, notes, created_at)
+           SELECT id, ?, COALESCE(?, CURRENT_TIMESTAMP)
+           FROM hymns WHERE hymn_number = ?;`,
+          [bookmark.notes, bookmark.created_at, bookmark.hymn_number],
+        );
+      }
+
+      await db.runAsync('INSERT INTO app_migrations (name) VALUES (?);', [
+        SAVED_DATA_MIGRATION,
+      ]);
+    });
+  } finally {
+    await legacyDb.closeAsync();
+  }
 }
 
 export interface FullHymn extends HymnSummary {
@@ -140,6 +220,14 @@ export async function getHymnsNumeric(
   return await db.getAllAsync<HymnSummary>(
     'SELECT id, hymn_number, title, category, author FROM hymns ORDER BY hymn_number ASC;',
   );
+}
+
+export async function getHymnCount(db: SQLite.SQLiteDatabase): Promise<number> {
+  const result = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) AS count FROM hymns;',
+  );
+
+  return result?.count ?? 0;
 }
 
 // 2. A-Z List (Alphabetical by title)

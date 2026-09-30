@@ -1,5 +1,7 @@
 import { useSettings } from '@/context/SettingsContext';
+import { getHymnCount } from '@/services/hymnService';
 import { router } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import {
   Contact,
   FileText,
@@ -8,6 +10,7 @@ import {
   List,
   Music2,
 } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
 import { Text as NativeText, ScrollView, View } from 'react-native';
 // import { ScrollView } from 'react-native-reanimated/lib/typescript/Animated';
 import SafeAreaViewLayout from '../SafeAreaViewLayout';
@@ -15,10 +18,36 @@ import HomeHeader from './HomeHeader';
 import { HymnNavCard } from './HymnNavCard';
 
 const HomeComp = () => {
+  const db = useSQLiteContext();
   const { theme } = useSettings();
   const isDark = theme === 'dark';
   const blueIconColor = isDark ? '#38BDF8' : '#005697';
   const redIconColor = isDark ? '#F87171' : '#E31D2B';
+  const [hymnCount, setHymnCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadHymnCount = async () => {
+      try {
+        const count = await getHymnCount(db);
+        if (isMounted) {
+          setHymnCount(count);
+        }
+      } catch (error) {
+        console.error('Failed to load hymn count:', error);
+        if (isMounted) {
+          setHymnCount(0);
+        }
+      }
+    };
+
+    loadHymnCount();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [db]);
 
   return (
     <SafeAreaViewLayout>
@@ -36,9 +65,9 @@ const HomeComp = () => {
           >
             <HymnNavCard
               title='All Songs'
-              subtitle='Explore all hymns in numerical sequence (1 – 300)'
+              subtitle={`Explore all hymns in numerical sequence (1 – ${hymnCount ?? '...'})`}
               icon={<List size={24} color={blueIconColor} strokeWidth={2.25} />}
-              badgeText='1 - 300'
+              badgeText={hymnCount ? `1 - ${hymnCount}` : 'Loading...'}
               accent='blue'
               layout='grid'
               onPress={() => router.push('/all-songs')}
@@ -58,7 +87,7 @@ const HomeComp = () => {
             />
             <HymnNavCard
               title='Numbers Screen'
-              subtitle='Browse all 300 hymns via numeric grid'
+              subtitle={`Browse all ${hymnCount ? hymnCount : '...'} hymns via numeric grid`}
               icon={
                 <Grid2X2 size={24} color={blueIconColor} strokeWidth={2.25} />
               }
@@ -82,7 +111,7 @@ const HomeComp = () => {
             />
             <HymnNavCard
               title='About'
-              subtitle='Browse all 300 hymns via numeric grid'
+              subtitle='About Faith Evangelical Mission Hymn'
               icon={<Info size={24} color={blueIconColor} strokeWidth={2.25} />}
               badgeText='Info'
               accent='blue'

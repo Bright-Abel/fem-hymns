@@ -101,17 +101,56 @@ const AtoZComp = () => {
 
   const scrollToSection = useCallback(
     (sectionIndex: number) => {
-      if (!sectionListRef.current || !sections[sectionIndex]) return;
+      if (!sections[sectionIndex]) return;
 
       pendingSectionRef.current = sectionIndex;
-      sectionListRef.current.scrollToLocation({
-        sectionIndex,
-        itemIndex: 0,
-        animated: true,
+
+      const tryScroll = () => {
+        if (!sectionListRef.current) return;
+
+        sectionListRef.current.scrollToLocation({
+          sectionIndex,
+          itemIndex: 0,
+          viewPosition: 0,
+          animated: true,
+        });
+      };
+
+      tryScroll();
+      requestAnimationFrame(tryScroll);
+      requestAnimationFrame(() => {
+        if (sectionListRef.current) {
+          sectionListRef.current.scrollToLocation({
+            sectionIndex,
+            itemIndex: 0,
+            viewPosition: 0,
+            animated: true,
+          });
+        }
       });
     },
     [sections],
   );
+
+  useEffect(() => {
+    if (pendingSectionRef.current === null) return;
+
+    const sectionIndex = pendingSectionRef.current;
+    const retryScroll = () => {
+      if (!sectionListRef.current || !sections[sectionIndex]) return;
+
+      sectionListRef.current.scrollToLocation({
+        sectionIndex,
+        itemIndex: 0,
+        viewPosition: 0,
+        animated: false,
+      });
+    };
+
+    const frameId = requestAnimationFrame(retryScroll);
+    return () => cancelAnimationFrame(frameId);
+  }, [sections]);
+
   return (
     <SafeAreaViewLayout>
       <AllSongHeader isDark={isDark} text='All Songs' />
@@ -128,20 +167,35 @@ const AtoZComp = () => {
       <View className='flex-1 flex-row'>
         <SectionList
           ref={sectionListRef}
+          style={{ flex: 1 }}
           sections={sections}
           keyExtractor={(item) => item.id.toString()}
           getItemLayout={getItemLayout}
+          onLayout={() => {
+            const sectionIndex = pendingSectionRef.current;
+            if (sectionIndex === null || !sectionListRef.current) return;
+
+            setTimeout(() => {
+              sectionListRef.current?.scrollToLocation({
+                sectionIndex,
+                itemIndex: 0,
+                viewPosition: 0,
+                animated: false,
+              });
+            }, 50);
+          }}
           onScrollToIndexFailed={() => {
             const sectionIndex = pendingSectionRef.current;
             if (sectionIndex === null) return;
 
-            requestAnimationFrame(() => {
+            setTimeout(() => {
               sectionListRef.current?.scrollToLocation({
                 sectionIndex,
                 itemIndex: 0,
+                viewPosition: 0,
                 animated: true,
               });
-            });
+            }, 80);
           }}
           showsVerticalScrollIndicator={false}
           initialNumToRender={20}

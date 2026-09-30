@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 import { StatusBar } from 'react-native';
 
 import { SettingsProvider, useSettings } from '@/context/SettingsContext';
-import { ensureSavedTables } from '@/services/hymnService';
+import { initializeHymnalDatabase } from '@/services/hymnService';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,13 +78,13 @@ export default function RootLayout() {
   return (
     <SettingsProvider>
       <SQLiteProvider
-        databaseName='hymnal.db'
+        databaseName='hymnal-v2.db'
         assetSource={{
           assetId: require('../../assets/hymnal.db'),
           forceOverwrite: false,
         }}
         useSuspense={false}
-        onInit={ensureSavedTables}
+        onInit={initializeHymnalDatabase}
         onError={(error) =>
           console.error('Failed to load hymnal database:', error)
         }

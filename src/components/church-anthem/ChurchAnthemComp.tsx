@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { Music4 } from 'lucide-react-native';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -19,7 +18,6 @@ const stanzas: StanzaItem[] = anthem.stanzas.map((stanza, index) => ({
 }));
 
 export default function ChurchAnthemComp() {
-  const router = useRouter();
   const { theme, fontSize } = useSettings();
   const isDark = theme === 'dark';
 

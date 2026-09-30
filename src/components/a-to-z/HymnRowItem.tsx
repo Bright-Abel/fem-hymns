@@ -3,14 +3,14 @@ import { Text, TouchableOpacity, View } from 'react-native';
 
 const ITEM_HEIGHT = 58;
 
-const HymnRowItem = React.memo(
-  ({
-    item,
-    onPress,
-  }: {
-    item: HymnSummary;
-    onPress: (num: number) => void;
-  }) => (
+const HymnRowItem = React.memo(function HymnRowItem({
+  item,
+  onPress,
+}: {
+  item: HymnSummary;
+  onPress: (num: number) => void;
+}) {
+  return (
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => onPress(item.hymn_number)}
@@ -30,7 +30,7 @@ const HymnRowItem = React.memo(
         {item.title}
       </Text>
     </TouchableOpacity>
-  ),
-);
+  );
+});
 
 export default HymnRowItem;

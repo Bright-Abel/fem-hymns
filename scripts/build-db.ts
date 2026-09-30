@@ -4,9 +4,11 @@ import * as path from 'path';
 
 console.log('🚀 Starting hymnal database build...');
 
-const RAW_PATH = path.join(__dirname, '../data-pipeline/raw_hymns.json');
+const RAW_PATH = path.join(__dirname, '../data-pipeline/raw_hymns2.json');
 const ASSETS_DIR = path.join(__dirname, '../assets');
-const DB_PATH = path.join(ASSETS_DIR, 'hymnal.db');
+const DB_PATH = process.env.HYMNAL_DB_PATH
+  ? path.resolve(process.env.HYMNAL_DB_PATH)
+  : path.join(ASSETS_DIR, 'hymnal.db');
 
 interface RawLyric {
   verse?: number;
@@ -29,24 +31,76 @@ interface RawHymn {
 function compile() {
   if (!fs.existsSync(RAW_PATH)) {
     console.error(
-      `❌ Error: Cannot find ${RAW_PATH}. Make sure data-pipeline/raw_hymns.json exists.`,
+      `❌ Error: Cannot find ${RAW_PATH}. Make sure data-pipeline/raw_hymns2.json exists.`,
     );
     process.exit(1);
   }
 
-  if (!fs.existsSync(ASSETS_DIR)) {
-    fs.mkdirSync(ASSETS_DIR, { recursive: true });
+  const rawFile = JSON.parse(fs.readFileSync(RAW_PATH, 'utf8'));
+  const sourceHymns: RawHymn[] = rawFile.hymns || rawFile;
+  const hymnsByNumber = new Map<number, RawHymn>();
+  let duplicateCount = 0;
+  let fullerRecordCount = 0;
+
+  for (const hymn of sourceHymns) {
+    const hymnNumber = Number(hymn.number);
+    if (!Number.isSafeInteger(hymnNumber)) {
+      throw new Error(`Invalid hymn number: ${hymn.number}`);
+    }
+
+    const existing = hymnsByNumber.get(hymnNumber);
+    if (!existing) {
+      hymnsByNumber.set(hymnNumber, hymn);
+      continue;
+    }
+
+    const metadata = (entry: RawHymn) =>
+      JSON.stringify({
+        title: entry.title,
+        category: entry.category ?? null,
+        author: entry.author ?? null,
+        meter: entry.meter ?? null,
+        key_signature: entry.key_signature ?? null,
+        audio_filename: entry.audio_filename ?? null,
+      });
+
+    if (metadata(existing) !== metadata(hymn)) {
+      throw new Error(
+        `Conflicting records for hymn number ${hymnNumber}: "${existing.title}" and "${hymn.title}".`,
+      );
+    }
+
+    if (JSON.stringify(existing) === JSON.stringify(hymn)) {
+      duplicateCount += 1;
+      continue;
+    }
+
+    const lyricLength = (entry: RawHymn) =>
+      entry.lyrics.reduce((length, lyric) => length + lyric.content.length, 0);
+    const existingLength = lyricLength(existing);
+    const incomingLength = lyricLength(hymn);
+
+    if (existingLength === incomingLength) {
+      throw new Error(
+        `Ambiguous lyric variants for hymn number ${hymnNumber}; resolve them in raw_hymns2.json before building.`,
+      );
+    }
+
+    if (incomingLength > existingLength) {
+      hymnsByNumber.set(hymnNumber, hymn);
+      fullerRecordCount += 1;
+    }
   }
 
+  const rawHymns = Array.from(hymnsByNumber.values());
+
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   if (fs.existsSync(DB_PATH)) {
     fs.unlinkSync(DB_PATH);
   }
 
-  const rawFile = JSON.parse(fs.readFileSync(RAW_PATH, 'utf8'));
-  const rawHymns: RawHymn[] = rawFile.hymns || rawFile;
-
   console.log(
-    `📖 Read ${rawHymns.length} hymns. Initializing SQLite tables with FTS5...`,
+    `📖 Read ${sourceHymns.length} records; building ${rawHymns.length} unique hymns (${duplicateCount} exact duplicates skipped, ${fullerRecordCount} fuller records selected). Initializing SQLite tables with FTS5...`,
   );
 
   const db = new Database(DB_PATH);
@@ -158,7 +212,7 @@ function compile() {
 
   tx();
   console.log(
-    `✅ Successfully compiled ${rawHymns.length} hymns into assets/hymnal.db!`,
+    `✅ Successfully compiled ${rawHymns.length} hymns into ${DB_PATH}!`,
   );
 }
 

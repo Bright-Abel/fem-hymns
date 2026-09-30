@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { FlatList, Text, TouchableOpacity, View } from 'react-native';
@@ -11,9 +10,8 @@ import { useSettings } from '@/context/SettingsContext';
 import { getHymnsNumeric } from '@/services/hymnService';
 
 export default function NumbersScreen() {
-  const router = useRouter();
   const db = useSQLiteContext();
-  const { theme, horizontalScroll } = useSettings();
+  const { theme } = useSettings();
   const isDark = theme === 'dark';
 
   const [search, setSearch] = useState('');
@@ -25,7 +23,7 @@ export default function NumbersScreen() {
       setHymns(data);
     }
     loadData();
-  }, [search]);
+  }, [db, search]);
 
   // const handleSelectHymn = (hymnNumber: number) => {
   //   router.push({

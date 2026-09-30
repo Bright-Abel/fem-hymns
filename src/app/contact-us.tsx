@@ -1,5 +1,4 @@
 // app/contact.tsx
-import { useRouter } from 'expo-router';
 import { MessageCircle, Phone } from 'lucide-react-native';
 import {
   Alert,
@@ -16,7 +15,6 @@ import images from '@/constants/images';
 import { useSettings } from '@/context/SettingsContext';
 
 const ContactUsScreen = () => {
-  const router = useRouter();
   const { theme } = useSettings();
   const isDark = theme === 'dark';
 

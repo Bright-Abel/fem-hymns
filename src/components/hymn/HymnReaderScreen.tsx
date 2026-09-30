@@ -43,6 +43,7 @@ const HymnReaderScreen = () => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const playerRef = useRef<AudioPlayer | null>(null);
   const repeatCountRef = useRef(0);
+  const currentRepeatCount = useRef(0);
 
   useEffect(() => {
     async function loadHymnAndStates() {
@@ -106,12 +107,15 @@ const HymnReaderScreen = () => {
         setIsPlaying(status.playing);
 
         if (status.didJustFinish) {
-          if (repeatAudioByStanza && repeatCountRef.current < totalVerses - 1) {
-            repeatCountRef.current += 1;
+          if (
+            repeatAudioByStanza &&
+            currentRepeatCount.current < totalVerses - 1
+          ) {
+            currentRepeatCount.current += 1;
             player.seekTo(0);
             player.play();
           } else {
-            repeatCountRef.current = 0;
+            currentRepeatCount.current = 0;
             setIsPlaying(false);
           }
         }
@@ -125,6 +129,7 @@ const HymnReaderScreen = () => {
       player.release();
       playerRef.current = null;
       setIsPlaying(false);
+      currentRepeatCount.current = 0;
       repeatCountRef.current = 0;
     };
   }, [hymn?.audio_url, autoPlayAudio, repeatAudioByStanza, totalVerses]);
@@ -139,7 +144,7 @@ const HymnReaderScreen = () => {
   const handleRestart = () => {
     const player = playerRef.current;
     if (!player) return;
-    repeatCountRef.current = 0;
+    currentRepeatCount.current = 0;
     player.seekTo(0);
     player.play();
   };
@@ -207,7 +212,7 @@ const HymnReaderScreen = () => {
           isDark={isDark}
           isPlaying={isPlaying}
           repeatAudioByStanza={repeatAudioByStanza}
-          repeatCount={repeatCountRef.current}
+          repeatCount={currentRepeatCount.current}
           totalVerses={totalVerses}
           onRestart={handleRestart}
           onToggle={togglePlayPause}

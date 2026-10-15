@@ -7,8 +7,8 @@ export interface Stanza {
   text: string;
 }
 
-const LEGACY_DATABASE_NAME = 'hymnal.db';
-const SAVED_DATA_MIGRATION = 'migrate-saved-data-from-hymnal-v1';
+const LEGACY_DATABASE_NAMES = ['hymnal-v2.db', 'hymnal.db'];
+const SAVED_DATA_MIGRATION = 'migrate-saved-data-to-hymnal-v3';
 
 export async function ensureSavedTables(
   db: SQLite.SQLiteDatabase,
@@ -48,64 +48,66 @@ export async function initializeHymnalDatabase(
   );
   if (completed) return;
 
-  const legacyDb = await SQLite.openDatabaseAsync(LEGACY_DATABASE_NAME);
-  try {
-    const legacyTables = await legacyDb.getAllAsync<{ name: string }>(
-      `SELECT name FROM sqlite_master
-       WHERE type = 'table' AND name IN ('hymns', 'favorites', 'bookmarks');`,
-    );
-    const tableNames = new Set(legacyTables.map(({ name }) => name));
+  for (const legacyDatabaseName of LEGACY_DATABASE_NAMES) {
+    const legacyDb = await SQLite.openDatabaseAsync(legacyDatabaseName);
+    try {
+      const legacyTables = await legacyDb.getAllAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name IN ('hymns', 'favorites', 'bookmarks');`,
+      );
+      const tableNames = new Set(legacyTables.map(({ name }) => name));
 
-    const legacyFavorites =
-      tableNames.has('hymns') && tableNames.has('favorites')
-        ? await legacyDb.getAllAsync<{
-            hymn_number: number;
-            created_at: string | null;
-          }>(
-            `SELECT h.hymn_number, f.created_at
-             FROM favorites f
-             JOIN hymns h ON h.id = f.hymn_id;`,
-          )
-        : [];
-    const legacyBookmarks =
-      tableNames.has('hymns') && tableNames.has('bookmarks')
-        ? await legacyDb.getAllAsync<{
-            hymn_number: number;
-            notes: string | null;
-            created_at: string | null;
-          }>(
-            `SELECT h.hymn_number, b.notes, b.created_at
-             FROM bookmarks b
-             JOIN hymns h ON h.id = b.hymn_id;`,
-          )
-        : [];
+      const legacyFavorites =
+        tableNames.has('hymns') && tableNames.has('favorites')
+          ? await legacyDb.getAllAsync<{
+              hymn_number: number;
+              created_at: string | null;
+            }>(
+              `SELECT h.hymn_number, f.created_at
+               FROM favorites f
+               JOIN hymns h ON h.id = f.hymn_id;`,
+            )
+          : [];
+      const legacyBookmarks =
+        tableNames.has('hymns') && tableNames.has('bookmarks')
+          ? await legacyDb.getAllAsync<{
+              hymn_number: number;
+              notes: string | null;
+              created_at: string | null;
+            }>(
+              `SELECT h.hymn_number, b.notes, b.created_at
+               FROM bookmarks b
+               JOIN hymns h ON h.id = b.hymn_id;`,
+            )
+          : [];
 
-    await db.withTransactionAsync(async () => {
-      for (const favorite of legacyFavorites) {
-        await db.runAsync(
-          `INSERT OR IGNORE INTO favorites (hymn_id, created_at)
-           SELECT id, COALESCE(?, CURRENT_TIMESTAMP)
-           FROM hymns WHERE hymn_number = ?;`,
-          [favorite.created_at, favorite.hymn_number],
-        );
-      }
+      await db.withTransactionAsync(async () => {
+        for (const favorite of legacyFavorites) {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO favorites (hymn_id, created_at)
+             SELECT id, COALESCE(?, CURRENT_TIMESTAMP)
+             FROM hymns WHERE hymn_number = ?;`,
+            [favorite.created_at, favorite.hymn_number],
+          );
+        }
 
-      for (const bookmark of legacyBookmarks) {
-        await db.runAsync(
-          `INSERT OR IGNORE INTO bookmarks (hymn_id, notes, created_at)
-           SELECT id, ?, COALESCE(?, CURRENT_TIMESTAMP)
-           FROM hymns WHERE hymn_number = ?;`,
-          [bookmark.notes, bookmark.created_at, bookmark.hymn_number],
-        );
-      }
-
-      await db.runAsync('INSERT INTO app_migrations (name) VALUES (?);', [
-        SAVED_DATA_MIGRATION,
-      ]);
-    });
-  } finally {
-    await legacyDb.closeAsync();
+        for (const bookmark of legacyBookmarks) {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO bookmarks (hymn_id, notes, created_at)
+             SELECT id, ?, COALESCE(?, CURRENT_TIMESTAMP)
+             FROM hymns WHERE hymn_number = ?;`,
+            [bookmark.notes, bookmark.created_at, bookmark.hymn_number],
+          );
+        }
+      });
+    } finally {
+      await legacyDb.closeAsync();
+    }
   }
+
+  await db.runAsync('INSERT INTO app_migrations (name) VALUES (?);', [
+    SAVED_DATA_MIGRATION,
+  ]);
 }
 
 export interface FullHymn extends HymnSummary {

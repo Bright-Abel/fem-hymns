@@ -5,6 +5,7 @@ interface HymnAudioPlayerProps {
   hymnNumber: number;
   isDark: boolean;
   isPlaying: boolean;
+  audioError: string | null;
   repeatAudioByStanza: boolean;
   repeatCount: number;
   totalVerses: number;
@@ -16,6 +17,7 @@ export function HymnAudioPlayer({
   hymnNumber,
   isDark,
   isPlaying,
+  audioError,
   repeatAudioByStanza,
   repeatCount,
   totalVerses,
@@ -35,39 +37,48 @@ export function HymnAudioPlayer({
           >
             Hymn Tune #{hymnNumber}
           </Text>
-          {repeatAudioByStanza && (
+          {audioError ? (
+            <Text
+              numberOfLines={2}
+              className='text-[10px] font-rubik text-brand-red'
+            >
+              {audioError}
+            </Text>
+          ) : repeatAudioByStanza ? (
             <Text className='text-[10px] font-rubik text-brand-red'>
               Repeat active ({repeatCount + 1}/{totalVerses})
             </Text>
-          )}
+          ) : null}
         </View>
       </View>
 
-      <View className='flex-row items-center space-x-2'>
-        <TouchableOpacity
-          accessibilityRole='button'
-          accessibilityLabel='Restart hymn audio'
-          onPress={onRestart}
-          className='p-2 rounded-full bg-slate-100 dark:bg-brand-dark-surface active:opacity-60'
-        >
-          <RotateCcw size={16} color={isDark ? '#FFFFFF' : '#005697'} />
-        </TouchableOpacity>
+      {!audioError && (
+        <View className='flex-row items-center space-x-2'>
+          <TouchableOpacity
+            accessibilityRole='button'
+            accessibilityLabel='Restart hymn audio'
+            onPress={onRestart}
+            className='p-2 rounded-full bg-slate-100 dark:bg-brand-dark-surface active:opacity-60'
+          >
+            <RotateCcw size={16} color={isDark ? '#FFFFFF' : '#005697'} />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          accessibilityRole='button'
-          accessibilityLabel={
-            isPlaying ? 'Pause hymn audio' : 'Play hymn audio'
-          }
-          onPress={onToggle}
-          className='w-12 h-12 rounded-full bg-brand-blue items-center justify-center active:scale-95 shadow-md'
-        >
-          {isPlaying ? (
-            <Pause size={20} color='#FFFFFF' />
-          ) : (
-            <Play size={20} color='#FFFFFF' />
-          )}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            accessibilityRole='button'
+            accessibilityLabel={
+              isPlaying ? 'Pause hymn audio' : 'Play hymn audio'
+            }
+            onPress={onToggle}
+            className='w-12 h-12 rounded-full bg-brand-blue items-center justify-center active:scale-95 shadow-md'
+          >
+            {isPlaying ? (
+              <Pause size={20} color='#FFFFFF' />
+            ) : (
+              <Play size={20} color='#FFFFFF' />
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }

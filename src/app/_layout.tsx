@@ -78,7 +78,7 @@ export default function RootLayout() {
   return (
     <SettingsProvider>
       <SQLiteProvider
-        databaseName='hymnal-v2.db'
+        databaseName='hymnal-v3.db'
         assetSource={{
           assetId: require('../../assets/hymnal.db'),
           forceOverwrite: false,

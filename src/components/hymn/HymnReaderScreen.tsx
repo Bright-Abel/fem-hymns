@@ -39,11 +39,19 @@ const HymnReaderScreen = () => {
   const [hymn, setHymn] = useState<HymnDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audioErrors, setAudioErrors] = useState<Record<string, string>>({});
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [repeatCount, setRepeatCount] = useState(0);
+  const audioError = useMemo(() => {
+    if (!hymn?.audio_url) return null;
+    if (/\.midi?$/i.test(hymn.audio_url)) {
+      return 'MIDI files cannot be played here. Use MP3 or WAV audio.';
+    }
+    return audioErrors[hymn.audio_url] ?? null;
+  }, [audioErrors, hymn?.audio_url]);
   const playerRef = useRef<AudioPlayer | null>(null);
-  const repeatCountRef = useRef(0);
-  const currentRepeatCount = useRef(0);
+  const currentRepeatCountRef = useRef(0);
 
   useEffect(() => {
     async function loadHymnAndStates() {
@@ -97,25 +105,50 @@ const HymnReaderScreen = () => {
   );
 
   useEffect(() => {
+    currentRepeatCountRef.current = 0;
     if (!hymn?.audio_url) return;
 
-    const player = createAudioPlayer(hymn.audio_url);
+    const audioUrl = hymn.audio_url;
+
+    let player: AudioPlayer;
+    try {
+      player = createAudioPlayer(audioUrl);
+    } catch (error) {
+      setAudioErrors((errors) => ({
+        ...errors,
+        [audioUrl]:
+          error instanceof Error ? error.message : 'Unable to load audio.',
+      }));
+      return;
+    }
+
     playerRef.current = player;
     const subscription = player.addListener(
       'playbackStatusUpdate',
       (status) => {
+        if (status.error) {
+          setAudioErrors((errors) => ({
+            ...errors,
+            [audioUrl]: status.error!,
+          }));
+          setIsPlaying(false);
+          return;
+        }
+
         setIsPlaying(status.playing);
 
         if (status.didJustFinish) {
           if (
             repeatAudioByStanza &&
-            currentRepeatCount.current < totalVerses - 1
+            currentRepeatCountRef.current < totalVerses - 1
           ) {
-            currentRepeatCount.current += 1;
+            currentRepeatCountRef.current += 1;
+            setRepeatCount(currentRepeatCountRef.current);
             player.seekTo(0);
             player.play();
           } else {
-            currentRepeatCount.current = 0;
+            currentRepeatCountRef.current = 0;
+            setRepeatCount(0);
             setIsPlaying(false);
           }
         }
@@ -129,8 +162,7 @@ const HymnReaderScreen = () => {
       player.release();
       playerRef.current = null;
       setIsPlaying(false);
-      currentRepeatCount.current = 0;
-      repeatCountRef.current = 0;
+      currentRepeatCountRef.current = 0;
     };
   }, [hymn?.audio_url, autoPlayAudio, repeatAudioByStanza, totalVerses]);
 
@@ -144,7 +176,8 @@ const HymnReaderScreen = () => {
   const handleRestart = () => {
     const player = playerRef.current;
     if (!player) return;
-    currentRepeatCount.current = 0;
+    currentRepeatCountRef.current = 0;
+    setRepeatCount(0);
     player.seekTo(0);
     player.play();
   };
@@ -211,8 +244,9 @@ const HymnReaderScreen = () => {
           hymnNumber={hymn.hymn_number}
           isDark={isDark}
           isPlaying={isPlaying}
+          audioError={audioError}
           repeatAudioByStanza={repeatAudioByStanza}
-          repeatCount={currentRepeatCount.current}
+          repeatCount={repeatCount}
           totalVerses={totalVerses}
           onRestart={handleRestart}
           onToggle={togglePlayPause}
